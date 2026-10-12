@@ -1,71 +1,49 @@
-# Auditor Setup and Test Guide
+# Run and Test 0-Shell
 
-This guide provides a repeatable way to build 0-Shell and demonstrate the
-required commands without relying on shell redirection or an editor builtin
-inside the program.
+Follow these steps in order. There are two prompts:
 
-## Prerequisites
+- **Normal terminal** looks like `s7@S7:/some/path$`.
+- **0-Shell** looks like `/some/path $`.
 
-- Rust and Cargo installed (`rustc --version` and `cargo --version`).
-- Linux or WSL is recommended for the Unix-style permissions shown by `ls -l`.
-- Open a host terminal in the project directory.
+Commands in the first section go in the normal terminal. Commands in the
+second section go only after 0-Shell starts.
 
-## Build and run automated tests
+## 1. Build and prepare test files in the normal terminal
 
-From the project directory:
+Copy and run this block in your normal WSL terminal:
 
 ```sh
+cd /mnt/c/Projects/0-shell
 cargo test
 cargo build
-```
-
-The tests cover parsing and file operations; the build creates
-`target/debug/0-shell`.
-
-## Start the shell
-
-Build from the project directory, then run the binary from a dedicated
-temporary test directory so audit files stay out of the repository:
-
-```sh
-cargo build
-mkdir -p /tmp/zero-shell-audit
+mkdir -p /tmp/zero-shell-audit/audit_parent/child_one
+mkdir -p /tmp/zero-shell-audit/audit_parent/child_two
+mkdir -p /tmp/zero-shell-audit/new_folder1
+mkdir -p /tmp/zero-shell-audit/new_folder2
+printf 'Hello from the audit test file!\n' > /tmp/zero-shell-audit/new_folder1/new_doc.txt
 cd /tmp/zero-shell-audit
 /mnt/c/Projects/0-shell/target/debug/0-shell
 ```
 
-The prompt shows the current directory followed by `$`. Enter one command per
-line and press Enter. The shell implements its supported commands itself and
-does not launch external commands. `mkdir` above is run by the host terminal
-before starting 0-Shell; it is not executed by the project.
+The `printf` line creates the sample file using the **normal terminal**, before
+0-Shell starts. The shell itself does not implement a text editor or output
+redirection. Do not type the file path by itself; that attempts to run it as a
+program.
 
-## Manual audit walkthrough
+## 2. Test commands inside 0-Shell
 
-Run these commands at the 0-Shell prompt:
+You should now see a prompt like `/tmp/zero-shell-audit $`. Copy and run these
+commands one at a time at that prompt:
 
 ```text
 pwd
 echo "something!"
 echo something else
-mkdir audit_parent/child_one audit_parent/child_two
+ls
+ls -l -a -F
 cd audit_parent
 pwd
 cd ..
-mkdir new_folder1 new_folder2
-ls -l -a -F
-exit
-```
-
-To test `cp`, `cat`, `mv`, and `rm`, create a file named `new_doc.txt` with a
-text editor at `/tmp/zero-shell-audit/new_folder1/new_doc.txt`. The editor is
-used outside 0-Shell because this project does not implement a text editor or
-output redirection. After saving the file, return to the host terminal, change
-back to `/tmp/zero-shell-audit`, and launch
-`/mnt/c/Projects/0-shell/target/debug/0-shell` again.
-
-Continue at the 0-Shell prompt:
-
-```text
 cp new_folder1/new_doc.txt new_folder2
 cat new_folder1/new_doc.txt
 cat new_folder2/new_doc.txt
@@ -79,19 +57,28 @@ pwd
 exit
 ```
 
-Check that both `cat` commands display the text, `ls` shows the moved
-`new_folder2` inside `new_folder1`, and the final listing no longer shows
-`new_folder1`. The `cd` command without an argument should change to the
-directory in `HOME`; `pwd` displays the resulting path. If you need to resume
-the audit after restarting the shell, launch it from the same test directory.
-All test folders are under `/tmp/zero-shell-audit`; the walkthrough does not
-create or remove test folders in the repository.
+Expected checks:
 
-## Notes about output
+- `pwd` initially prints `/tmp/zero-shell-audit`.
+- `echo` prints the text entered.
+- `audit_parent` contains `child_one` and `child_two`; `pwd` prints its path
+  after `cd audit_parent`.
+- Both `cat` commands print `Hello from the audit test file!`.
+- After `mv`, the listing for `new_folder1` shows `new_doc.txt` and
+  `new_folder2/`.
+- After `rm -r new_folder1` and `rm -r audit_parent`, the final `ls` no longer
+  shows either test folder.
+- `cd` with no argument changes to your home directory; `pwd` shows it.
+- `exit` returns to the normal terminal.
 
-- `ls -a` includes `.` and `..` as well as hidden entries.
-- `ls -l` shows type and permissions, link count, numeric user/group IDs,
-  size, modification time, and name. Timestamps are UTC and IDs are numeric,
-  so exact columns can differ from the host's `ls`.
-- Ctrl+D exits by sending end-of-file to the shell.
-- `exit` returns to the terminal that launched the shell.
+All test files and folders are created under `/tmp/zero-shell-audit`, outside
+the project directory.
+
+## Notes
+
+- If your project is not at `/mnt/c/Projects/0-shell`, change the path to
+  `target/debug/0-shell` in the launch command.
+- `ls -l` shows permissions, numeric user/group IDs, size, modification time,
+  and other long-listing information. Formatting and numeric IDs can differ
+  from your system's `ls`.
+- Ctrl+D also exits 0-Shell by sending end-of-file.
